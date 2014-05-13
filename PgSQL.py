@@ -420,6 +420,7 @@ class PgSQLBackend(SQLBackend):
 		self._licenseManagementModule = False
 		self._sqlBackendModule = False
 
+		backendinfo = self._context.backend_info()
 		modules = backendinfo['modules']
 		helpermodules = backendinfo['realmodules']
 
