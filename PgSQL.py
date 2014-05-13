@@ -413,20 +413,17 @@ class PgSQLBackend(SQLBackend):
 		self._name = 'pgsql'
 
 		SQLBackend.__init__(self, **kwargs)
-
 		self._sql = PgSQL(**kwargs)
-
 		warnings.showwarning = self._showwarning
 
 		self._licenseManagementEnabled = True
 		self._licenseManagementModule = False
 		self._sqlBackendModule = False
 
-		backendinfo = self._context.backend_info()
 		modules = backendinfo['modules']
 		helpermodules = backendinfo['realmodules']
 
-		self._sqlBackendModule = True
+		backendinfo = self._context.backend_info()
 		logger.debug(u'PgSQLBackend created: %s' % self)
 
 	def _showwarning(self, message, category, filename, lineno, line=None, file=None):

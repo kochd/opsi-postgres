@@ -958,9 +958,6 @@ class SQLBackend(ConfigDataBackend):
 	# -   Configs                                                                                   -
 	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	def config_insertObject(self, config):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.config_insertObject(self, config)
 		data = self._objectToDatabaseHash(config)
 		possibleValues = data['possibleValues']
@@ -987,9 +984,6 @@ class SQLBackend(ConfigDataBackend):
 				})
 
 	def config_updateObject(self, config):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.config_updateObject(self, config)
 		data = self._objectToDatabaseHash(config)
 		where = self._uniqueCondition(config)
@@ -1012,9 +1006,6 @@ class SQLBackend(ConfigDataBackend):
 				})
 
 	def config_getObjects(self, attributes=[], **filter):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.config_getObjects(self, attributes=[], **filter)
 		logger.info(u"Getting configs, filter: %s" % filter)
 		configs = []
@@ -1055,9 +1046,6 @@ class SQLBackend(ConfigDataBackend):
 		return configs
 
 	def config_deleteObjects(self, configs):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.config_deleteObjects(self, configs)
 		for config in forceObjectClassList(configs, Config):
 			logger.info(u"Deleting config %s" % config)
@@ -1069,9 +1057,6 @@ class SQLBackend(ConfigDataBackend):
 	# -   ConfigStates                                                                              -
 	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	def configState_insertObject(self, configState):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.configState_insertObject(self, configState)
 		data = self._objectToDatabaseHash(configState)
 		data['values'] = json.dumps(data['values'])
@@ -1083,9 +1068,6 @@ class SQLBackend(ConfigDataBackend):
 			self._sql.insert('CONFIG_STATE', data)
 
 	def configState_updateObject(self, configState):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.configState_updateObject(self, configState)
 		data = self._objectToDatabaseHash(configState)
 		where = self._uniqueCondition(configState)
@@ -1093,9 +1075,6 @@ class SQLBackend(ConfigDataBackend):
 		self._sql.update('CONFIG_STATE', where, data)
 
 	def configState_getObjects(self, attributes=[], **filter):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.configState_getObjects(self, attributes=[], **filter)
 		logger.info(u"Getting configStates, filter: %s" % filter)
 		configStates = []
@@ -1107,9 +1086,6 @@ class SQLBackend(ConfigDataBackend):
 		return configStates
 
 	def configState_deleteObjects(self, configStates):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.configState_deleteObjects(self, configStates)
 		for configState in forceObjectClassList(configStates, ConfigState):
 			logger.info("Deleting configState %s" % configState)
@@ -1137,9 +1113,6 @@ class SQLBackend(ConfigDataBackend):
 			self._sql.insert('WINDOWS_SOFTWARE_ID_TO_PRODUCT', {'windowsSoftwareId': windowsSoftwareId, 'productId': data['productId']})
 
 	def product_updateObject(self, product):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.product_updateObject(self, product)
 		data = self._objectToDatabaseHash(product)
 		where = self._uniqueCondition(product)
@@ -1153,9 +1126,6 @@ class SQLBackend(ConfigDataBackend):
 				self._sql.insert('WINDOWS_SOFTWARE_ID_TO_PRODUCT', {'windowsSoftwareId': windowsSoftwareId, 'productId': data['productId']})
 
 	def product_getObjects(self, attributes=[], **filter):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.product_getObjects(self, attributes=[], **filter)
 		logger.info(u"Getting products, filter: %s" % filter)
 		products = []
@@ -1173,9 +1143,6 @@ class SQLBackend(ConfigDataBackend):
 		return products
 
 	def product_deleteObjects(self, products):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.product_deleteObjects(self, products)
 		for product in forceObjectClassList(products, Product):
 			logger.info("Deleting product %s" % product)
@@ -1187,9 +1154,6 @@ class SQLBackend(ConfigDataBackend):
 	# -   ProductProperties                                                                         -
 	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	def productProperty_insertObject(self, productProperty):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productProperty_insertObject(self, productProperty)
 		data = self._objectToDatabaseHash(productProperty)
 		possibleValues = data['possibleValues']
@@ -1314,9 +1278,6 @@ class SQLBackend(ConfigDataBackend):
 		self._sql.close(conn,cursor)
 
 	def productProperty_updateObject(self, productProperty):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productProperty_updateObject(self, productProperty)
 		data = self._objectToDatabaseHash(productProperty)
 		where = self._uniqueCondition(productProperty)
@@ -1355,9 +1316,6 @@ class SQLBackend(ConfigDataBackend):
 				logger.debug(u'doCommit set to true')
 
 	def productProperty_getObjects(self, attributes=[], **filter):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productProperty_getObjects(self, attributes=[], **filter)
 		logger.info(u"Getting product properties, filter: %s" % filter)
 		productProperties = []
@@ -1376,9 +1334,6 @@ class SQLBackend(ConfigDataBackend):
 		return productProperties
 
 	def productProperty_deleteObjects(self, productProperties):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productProperty_deleteObjects(self, productProperties)
 		for productProperty in forceObjectClassList(productProperties, ProductProperty):
 			logger.info("Deleting product property %s" % productProperty)
@@ -1390,9 +1345,6 @@ class SQLBackend(ConfigDataBackend):
 	# -   ProductDependencies                                                                         -
 	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	def productDependency_insertObject(self, productDependency):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productDependency_insertObject(self, productDependency)
 		data = self._objectToDatabaseHash(productDependency)
 
@@ -1403,9 +1355,6 @@ class SQLBackend(ConfigDataBackend):
 			self._sql.insert('PRODUCT_DEPENDENCY', data)
 
 	def productDependency_updateObject(self, productDependency):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productDependency_updateObject(self, productDependency)
 		data = self._objectToDatabaseHash(productDependency)
 		where = self._uniqueCondition(productDependency)
@@ -1413,9 +1362,6 @@ class SQLBackend(ConfigDataBackend):
 		self._sql.update('PRODUCT_DEPENDENCY', where, data)
 
 	def productDependency_getObjects(self, attributes=[], **filter):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productDependency_getObjects(self, attributes=[], **filter)
 		logger.info(u"Getting product dependencies, filter: %s" % filter)
 		productDependencies = []
@@ -1425,9 +1371,6 @@ class SQLBackend(ConfigDataBackend):
 		return productDependencies
 
 	def productDependency_deleteObjects(self, productDependencies):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productDependency_deleteObjects(self, productDependencies)
 		for productDependency in forceObjectClassList(productDependencies, ProductDependency):
 			logger.info("Deleting product dependency %s" % productDependency)
@@ -1438,9 +1381,6 @@ class SQLBackend(ConfigDataBackend):
 	# -   ProductOnDepots                                                                           -
 	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	def productOnDepot_insertObject(self, productOnDepot):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productOnDepot_insertObject(self, productOnDepot)
 		data = self._objectToDatabaseHash(productOnDepot)
 
@@ -1455,18 +1395,12 @@ class SQLBackend(ConfigDataBackend):
 			self._sql.insert('PRODUCT_ON_DEPOT', data)
 
 	def productOnDepot_updateObject(self, productOnDepot):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productOnDepot_updateObject(self, productOnDepot)
 		data = self._objectToDatabaseHash(productOnDepot)
 		where = self._uniqueCondition(productOnDepot)
 		self._sql.update('PRODUCT_ON_DEPOT', where, data)
 
 	def productOnDepot_getObjects(self, attributes=[], **filter):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productOnDepot_getObjects(self, attributes=[], **filter)
 		productOnDepots = []
 		(attributes, filter) = self._adjustAttributes(ProductOnDepot, attributes, filter)
@@ -1475,9 +1409,6 @@ class SQLBackend(ConfigDataBackend):
 		return productOnDepots
 
 	def productOnDepot_deleteObjects(self, productOnDepots):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productOnDepot_deleteObjects(self, productOnDepots)
 		for productOnDepot in forceObjectClassList(productOnDepots, ProductOnDepot):
 			logger.info(u"Deleting productOnDepot %s" % productOnDepot)
@@ -1488,9 +1419,6 @@ class SQLBackend(ConfigDataBackend):
 	# -   ProductOnClients                                                                          -
 	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	def productOnClient_insertObject(self, productOnClient):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productOnClient_insertObject(self, productOnClient)
 		data = self._objectToDatabaseHash(productOnClient)
 
@@ -1506,18 +1434,12 @@ class SQLBackend(ConfigDataBackend):
 			self._sql.insert('PRODUCT_ON_CLIENT', data)
 
 	def productOnClient_updateObject(self, productOnClient):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productOnClient_updateObject(self, productOnClient)
 		data = self._objectToDatabaseHash(productOnClient)
 		where = self._uniqueCondition(productOnClient)
 		self._sql.update('PRODUCT_ON_CLIENT', where, data)
 
 	def productOnClient_getObjects(self, attributes=[], **filter):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productOnClient_getObjects(self, attributes=[], **filter)
 		logger.info(u"Getting productOnClients, filter: %s" % filter)
 		productOnClients = []
@@ -1527,9 +1449,6 @@ class SQLBackend(ConfigDataBackend):
 		return productOnClients
 
 	def productOnClient_deleteObjects(self, productOnClients):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productOnClient_deleteObjects(self, productOnClients)
 		for productOnClient in forceObjectClassList(productOnClients, ProductOnClient):
 			logger.info(u"Deleting productOnClient %s" % productOnClient)
@@ -1540,9 +1459,6 @@ class SQLBackend(ConfigDataBackend):
 	# -   ProductPropertyStates                                                                     -
 	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	def productPropertyState_insertObject(self, productPropertyState):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productPropertyState_insertObject(self, productPropertyState)
 		if not self._sql.getSet(self._createQuery('HOST', ['hostId'], {"hostId": productPropertyState.objectId})):
 			raise BackendReferentialIntegrityError(u"Object '%s' does not exist" % productPropertyState.objectId)
@@ -1556,9 +1472,6 @@ class SQLBackend(ConfigDataBackend):
 			self._sql.insert('PRODUCT_PROPERTY_STATE', data)
 
 	def productPropertyState_updateObject(self, productPropertyState):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productPropertyState_updateObject(self, productPropertyState)
 		data = self._objectToDatabaseHash(productPropertyState)
 		where = self._uniqueCondition(productPropertyState)
@@ -1566,9 +1479,6 @@ class SQLBackend(ConfigDataBackend):
 		self._sql.update('PRODUCT_PROPERTY_STATE', where, data)
 
 	def productPropertyState_getObjects(self, attributes=[], **filter):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productPropertyState_getObjects(self, attributes=[], **filter)
 		logger.info(u"Getting productPropertyStates, filter: %s" % filter)
 		productPropertyStates = []
@@ -1580,9 +1490,6 @@ class SQLBackend(ConfigDataBackend):
 		return productPropertyStates
 
 	def productPropertyState_deleteObjects(self, productPropertyStates):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.productPropertyState_deleteObjects(self, productPropertyStates)
 		for productPropertyState in forceObjectClassList(productPropertyStates, ProductPropertyState):
 			logger.info(u"Deleting productPropertyState %s" % productPropertyState)
@@ -1593,9 +1500,6 @@ class SQLBackend(ConfigDataBackend):
 	# -   Groups                                                                                    -
 	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	def group_insertObject(self, group):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.group_insertObject(self, group)
 		data = self._objectToDatabaseHash(group)
 
@@ -1606,18 +1510,12 @@ class SQLBackend(ConfigDataBackend):
 			self._sql.insert('GROUP', data)
 
 	def group_updateObject(self, group):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.group_updateObject(self, group)
 		data = self._objectToDatabaseHash(group)
 		where = self._uniqueCondition(group)
 		self._sql.update('GROUP', where, data)
 
 	def group_getObjects(self, attributes=[], **filter):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.group_getObjects(self, attributes=[], **filter)
 		logger.info(u"Getting groups, filter: %s" % filter)
 		groups = []
@@ -1628,9 +1526,6 @@ class SQLBackend(ConfigDataBackend):
 		return groups
 
 	def group_deleteObjects(self, groups):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.group_deleteObjects(self, groups)
 		for group in forceObjectClassList(groups, Group):
 			logger.info(u"Deleting group %s" % group)
@@ -1641,9 +1536,6 @@ class SQLBackend(ConfigDataBackend):
 	# -   ObjectToGroups                                                                            -
 	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	def objectToGroup_insertObject(self, objectToGroup):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.objectToGroup_insertObject(self, objectToGroup)
 		data = self._objectToDatabaseHash(objectToGroup)
 
@@ -1654,18 +1546,12 @@ class SQLBackend(ConfigDataBackend):
 			self._sql.insert('OBJECT_TO_GROUP', data)
 
 	def objectToGroup_updateObject(self, objectToGroup):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.objectToGroup_updateObject(self, objectToGroup)
 		data = self._objectToDatabaseHash(objectToGroup)
 		where = self._uniqueCondition(objectToGroup)
 		self._sql.update('OBJECT_TO_GROUP', where, data)
 
 	def objectToGroup_getObjects(self, attributes=[], **filter):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.objectToGroup_getObjects(self, attributes=[], **filter)
 		logger.info(u"Getting objectToGroups, filter: %s" % filter)
 		objectToGroups = []
@@ -1675,9 +1561,6 @@ class SQLBackend(ConfigDataBackend):
 		return objectToGroups
 
 	def objectToGroup_deleteObjects(self, objectToGroups):
-		if not self._sqlBackendModule:
-			raise Exception(u"SQL backend module disabled")
-
 		ConfigDataBackend.objectToGroup_deleteObjects(self, objectToGroups)
 		for objectToGroup in forceObjectClassList(objectToGroups, ObjectToGroup):
 			logger.info(u"Deleting objectToGroup %s" % objectToGroup)
