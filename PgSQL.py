@@ -285,6 +285,9 @@ class PgSQL(SQL):
 			logger.debug2(u"insert: %s" % query)
 			try:
 				self.execute(query, conn, cursor)
+			except psycopg2.DataError:
+				logger.warning(u"Query: %s was truncated" % query)
+				pass
 			except Exception as e:
 				logger.debug(u"Execute error: %s" % e)
 				if (e[0] != 2006):
