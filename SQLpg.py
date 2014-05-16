@@ -821,7 +821,6 @@ class SQLBackend(ConfigDataBackend):
 			hardwareDeviceValuesProcessed = 0;
 			hardwareConfigValuesProcessed = 0;
 			for (value, valueInfo) in values.items():
-				value=value.lower()
 				logger.debug(u"  Processing value '%s'" % value)
 				if   (valueInfo['Scope'] == 'g'):
 					if hardwareDeviceTableExists:
@@ -831,12 +830,12 @@ class SQLBackend(ConfigDataBackend):
 							# Column exists => change
 							if not self._sql.ALTER_TABLE_CHANGE_SUPPORTED:
 								continue
-							hardwareDeviceTable += u'ALTER COLUMN %s TYPE %s ,\n' % (value, valueInfo['Type'])
+							hardwareDeviceTable += u'ALTER COLUMN "%s" TYPE %s ,\n' % (value, valueInfo['Type'])
 						else:
 							# Column does not exist => add
 							hardwareDeviceTable += u'ADD %s %s NULL,\n' % (value, valueInfo["Type"])
 					else:
-						hardwareDeviceTable += u'%s %s NULL,\n' % (value, valueInfo["Type"])
+						hardwareDeviceTable += u'"%s" %s NULL,\n' % (value, valueInfo["Type"])
 					hardwareDeviceValuesProcessed += 1
 				elif (valueInfo['Scope'] == 'i'):
 					if hardwareConfigTableExists:
@@ -844,12 +843,12 @@ class SQLBackend(ConfigDataBackend):
 							# Column exists => change
 							if not self._sql.ALTER_TABLE_CHANGE_SUPPORTED:
 								continue
-							hardwareConfigTable += u'ALTER COLUMN %s TYPE %s ,\n' % (value, valueInfo['Type'])
+							hardwareConfigTable += u'ALTER COLUMN "%s" TYPE %s ,\n' % (value, valueInfo['Type'])
 						else:
 							# Column does not exist => add
 							hardwareConfigTable += u'ADD %s %s NULL,\n' % (value, valueInfo['Type'])
 					else:
-						hardwareConfigTable += u'%s %s NULL,\n' % (value, valueInfo['Type'])
+						hardwareConfigTable += u'"%s" %s NULL,\n' % (value, valueInfo['Type'])
 					hardwareConfigValuesProcessed += 1
 
 			if not hardwareDeviceTableExists:
