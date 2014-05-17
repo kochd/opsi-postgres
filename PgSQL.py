@@ -94,9 +94,9 @@ class PgSQL(SQL):
 
 	AUTOINCREMENT = 'SERIAL'
 	ALTER_TABLE_CHANGE_SUPPORTED = True
-	ESCAPED_BACKSLASH  = "\\\\"
+	ESCAPED_BACKSLASH  = "\\"
 	ESCAPED_APOSTROPHE = "''"
-	ESCAPED_ASTERISK   = "\\*"
+	ESCAPED_ASTERISK   = "*"
 	doCommit = True
 
 	def __init__(self, **kwargs):
