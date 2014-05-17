@@ -23,9 +23,10 @@ sudo -u postgres psql            # open the psql cli
 
 ### Copy files
 * Copy PgSQL.py and SQLpg.py to your pymodules destination ( e.g. /usr/lib/pymodules/python2.7/OPSI/Backend/ )
+* Copy opsihwaudit.conf to /etc/opsi/hwaudit/
 * Copy pgsql.conf to /etc/opsi/backends/
 
-### Setup
+### Configure
 * Change pgsql.conf to match your database, user and password
 * Chnage /etc/opsi/backendManager/dispatch.conf to your need ( e.g replace file or mysql by pgsql )
 
