@@ -282,7 +282,6 @@ class SQLBackend(ConfigDataBackend):
 
 	def _adjustResult(self, objectClass, result):
 		id = self._objectAttributeToDatabaseAttribute(objectClass, 'id')
-		print result
 		if result.has_key(id):
 			result['id'] = result[id]
 			del result[id]
@@ -821,7 +820,6 @@ class SQLBackend(ConfigDataBackend):
 				logger.debug(u"  Processing value '%s'" % value)
 				if   (valueInfo['Scope'] == 'g'):
 					if hardwareDeviceTableExists:
-						print tables[hardwareDeviceTableName]
 						if value in tables[hardwareDeviceTableName]:
 							logger.debug2(u"Column exitst -> Change")
 							# Column exists => change
