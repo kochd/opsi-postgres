@@ -13,13 +13,13 @@ I need to know the bugs in order to fix them.
 ### Setting up the database and user
 First of all you have to setup a postgres database and create a user.
 
-<code>
+<pre>
 apt-get install postgres sudo    # Install postgres and sudo
 sudo -u postgres createuser opsi # create the user opsi
 sudo -u postgres createdb opsi   # create the database opsi
 sudo -u postgres psql            # open the psql cli
 \password opsi                   # change password for user opsi
-</code>
+</pre>
 
 ### Copy files
 * Copy PgSQL.py and SQLpg.py to your pymodules destination ( e.g. /usr/lib/pymodules/python2.7/OPSI/Backend/ )
