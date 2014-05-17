@@ -6,9 +6,7 @@ opsi python library - PgSQL
 This module is part of the desktop management solution opsi
 (open pc server integration) http://www.opsi.org
 
-Copyright (C) 2013 uib GmbH
-
-http://www.uib.de/
+Copyright (C) 2014 Daniel Koch
 
 All rights reserved.
 
@@ -24,9 +22,8 @@ Affero General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-@copyright: uib GmbH <info@uib.de>
-@author: Jan Schneider <j.schneider@uib.de>
-@author: Erol Ueluekmen <e.ueluekmen@uib.de>
+@copyright: Daniel Koch <koch@triple6.org>
+@author: Daniel Koch <koch@triple6.org>
 @license: GNU Affero GPL version 3
 """
 
