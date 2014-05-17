@@ -2,7 +2,7 @@
 Postgres Backend for [OPSI](http://opsi.org)
 
 * Under development
-* Might have bugs
+* [Bugs?](./issues)
 * Not tested in production
 * Not official supported by UIB
 
