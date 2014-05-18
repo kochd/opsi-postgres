@@ -1,0 +1,25 @@
+#!/usr/bin/python
+from OPSI.Backend.BackendManager import *
+domain="v.lan"
+limit=500
+
+backend = BackendManager(
+             dispatchConfigFile = u'/etc/opsi/backendManager/dispatch.conf',
+             backendConfigDir   = u'/etc/opsi/backends',
+             extensionConfigDir = u'/etc/opsi/backendManager/extend.d',
+                        )
+
+for ID in range(1,limit):
+    print "Creating: [%s/%s]" % (ID,limit)
+    backend.createClient("benchmark%s" % ID,domain,"benchmark%s" % ID,"benchmark%s" % ID)
+
+for ID in range(1,limit):
+    print "Reading Host_hash: [%s/%s]" % (ID,limit)
+    backend.getHost_hash("benchmark%s.%s" % (ID,domain))
+
+print "Reading Clients_listOfHashes:"
+backend.getClients_listOfHashes()
+
+for ID in range(1,limit):
+    print "Deleting: [%s/%s]" % (ID,limit)
+    backend.deleteClient("benchmark%s.%s" % (ID,domain))
