@@ -27,12 +27,12 @@ sudo -u postgres psql            # open the psql cli
 * Copy postgres.conf to /etc/opsi/backends/
 
 ### Configure
-* Change pgsql.conf to match your database, user and password
-* Change /etc/opsi/backendManager/dispatch.conf to your need ( e.g replace file or mysql by pgsql )
+* Change postgres.conf to match your database, user and password
+* Change /etc/opsi/backendManager/dispatch.conf to your need ( e.g replace file or mysql by postgres )
 
 ### Initialize
 * Use opsi-setup --init-current-config to initial the change
-* You can use opsi-convert to convert your old backend to pgsql ( e.g opsi-convert file pgsql or opsi-convert mysql pgsql )
+* You can use opsi-convert to convert your old backend to postgres ( e.g opsi-convert file postgres or opsi-convert mysql postgres )
 * Restart your services ( opsiconfd , opsipxeconfd )
 
 
