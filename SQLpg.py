@@ -1,10 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
-opsi python library - PgSQL
-
-This module is part of the desktop management solution opsi
-(open pc server integration) http://www.opsi.org
+opsi python library - Postgres
 
 Copyright (C) 2014 Daniel Koch
 

@@ -1,10 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
-opsi python library - PgSQL
-
-This module is part of the desktop management solution opsi
-(open pc server integration) http://www.opsi.org
+opsi python library - Postgres
 
 Copyright (C) 2014 Daniel Koch
 
@@ -87,7 +84,7 @@ class ConnectionPool(object):
 		return setattr(self.__instance, attr, value)
 
 
-class PgSQL(SQL):
+class Postgres(SQL):
 
 	AUTOINCREMENT = 'SERIAL'
 	ALTER_TABLE_CHANGE_SUPPORTED = True
@@ -408,13 +405,13 @@ class PgSQL(SQL):
 #		return u'ENGINE=InnoDB DEFAULT CHARSET utf8 COLLATE utf8_general_ci'
 
 
-class PgSQLBackend(SQLBackend):
+class PostgresBackend(SQLBackend):
 
 	def __init__(self, **kwargs):
 		self._name = 'pgsql'
 
 		SQLBackend.__init__(self, **kwargs)
-		self._sql = PgSQL(**kwargs)
+		self._sql = Postgres(**kwargs)
 		warnings.showwarning = self._showwarning
 
 		self._licenseManagementEnabled = True
@@ -465,7 +462,7 @@ class PgSQLBackend(SQLBackend):
 		self._sql.execute('CREATE INDEX "index_host_type" on "HOST" ("type");')
 
 
-class PgSQLBackendObjectModificationTracker(SQLBackendObjectModificationTracker):
+class PostgresBackendObjectModificationTracker(SQLBackendObjectModificationTracker):
 	def __init__(self, **kwargs):
 		SQLBackendObjectModificationTracker.__init__(self, **kwargs)
 		self._sql = SQL(**kwargs)
