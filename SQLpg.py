@@ -1897,7 +1897,7 @@ class SQLBackend(ConfigDataBackend):
 		(attributes, filter) = self._adjustAttributes(AuditSoftwareOnClient, attributes, filter)
 		result = self._sql.getSet(self._createQuery('SOFTWARE_CONFIG', attributes, filter))
 
-		# this fixes the problem that datetime.datime types cannot be converted to json
+		# this fixes the problem that datetime.datetime types cannot be converted to json
 		# convert them to str first
 		for r in result:
 			r['lastUsed'] = str(r['lastUsed'])
