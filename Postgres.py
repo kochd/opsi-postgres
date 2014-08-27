@@ -159,9 +159,6 @@ class Postgres(SQL):
 		myMaxRetryConnection = 10
 		myRetryConnectionCounter = 0
 
-		if not cursorType:
-			cursorType = psycopg2.extras.RealDictCursor
-
 		while (not myConnectionSuccess) and (myRetryConnectionCounter < myMaxRetryConnection):
 			try:
 				if (myRetryConnectionCounter > 0):
@@ -171,7 +168,8 @@ class Postgres(SQL):
 				logger.debug(u"Got thread lock")
 				logger.debug(u"Connection pool status: %s" % self._pool.status())
 				conn = self._pool.connect()
-				cursor = conn.cursor(cursorType)
+
+				cursor = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 				myConnectionSuccess = True
 			except Exception as e:
 				logger.debug(u"Execute error: %s" % e)
@@ -344,19 +342,19 @@ class Postgres(SQL):
 					value = u"NULL"
 				elif type(value) is bool:
 					if value:
-						value += u"true, "
+						value = u"true"
 					else:
-						value += u"false, "
+						value = u"false"
 				elif type(value) in (float, long, int):
-					value += u"%s, " % value
+					value = u"%s" % value
 				elif type(value) is str:
 					value = u"\'{0}\'".format(self.escapeApostrophe(self.escapeBackslash(value.decode("utf-8"))))
 				else:
 					value = u"\'{0}\'".format(self.escapeApostrophe(self.escapeBackslash(value)))
 
-				query.append(u"'{0}' = {1}".format(key, value))
-
+				query.append(u'"{0}" = {1}'.format(key, value))
 			query = u'UPDATE "{0}" SET {1} WHERE {2};'.format(table, ', '.join(query), where)
+
 			logger.debug2(u"update: %s" % query)
 			try:
 				self.execute(query, conn, cursor)
@@ -526,7 +524,7 @@ class PostgresBackend(SQLBackend):
 					# transaction
 					cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE")
 					self._sql.doCommit = False
-					conn.begin()
+#					conn.begin()
 					logger.notice(u'Start Transaction: delete from ppv %d' % myRetryTransactionCounter)
 
 					self._sql.delete('PRODUCT_PROPERTY_VALUE', where, conn, cursor)
@@ -559,15 +557,15 @@ class PostgresBackend(SQLBackend):
 				# transform arguments for sql
 				# from uniqueCondition
 				if (value in defaultValues):
-					myPPVdefault = u'"isDefault" = true'
+					myPPVdefault = u'"isDefault" = \'true\''
 				else:
-					myPPVdefault = u'"isDefault" = false'
+					myPPVdefault = u'"isDefault" = \'false\''
 
 				if type(value) is bool:
 					if value:
-						myPPVvalue = u'"value" = true'
+						myPPVvalue = u'"value" = \'true\''
 					else:
-						myPPVvalue = u'"value" = false'
+						myPPVvalue = u'"value" = \'false\''
 				elif type(value) in (float, long, int):
 					myPPVvalue = u'"value" = %s' % (value)
 				else:
@@ -594,7 +592,7 @@ class PostgresBackend(SQLBackend):
 						# transaction
 						cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE")
 						self._sql.doCommit = False
-						conn.begin()
+#						conn.begin()
 						logger.notice(u'Start Transaction: insert to ppv %d' % myRetryTransactionCounter)
 						if not self._sql.getRow(myPPVselect , conn, cursor):
 							# self._sql.doCommit = True

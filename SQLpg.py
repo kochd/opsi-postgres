@@ -168,6 +168,8 @@ class SQLBackendObjectModificationTracker(BackendModificationListener):
 
 class SQLBackend(ConfigDataBackend):
 
+	OPERATOR_IN_CONDITION_PATTERN = re.compile('^\s*([>=<]+)\s*(\d\.?\d*)')
+
 	def __init__(self, **kwargs):
 		self._name = 'sql'
 
@@ -203,9 +205,9 @@ class SQLBackend(ConfigDataBackend):
 			for value in values:
 				if type(value) is bool:
 					if value:
-						tmp.append(u'"{0}" = 1'.format(key))
+						tmp.append(u'"{0}" = \'true\''.format(key))
 					else:
-						tmp.append(u'"{0}" = 0'.format(key))
+						tmp.append(u'"{0}" = \'false\''.format(key))
 				elif type(value) in (float, long, int):
 					tmp.append(u'"{0}" = {1}'.format(key, value))
 				elif value is None:
@@ -346,12 +348,12 @@ class SQLBackend(ConfigDataBackend):
 			arg = self._objectAttributeToDatabaseAttribute(object.__class__, arg)
 			if type(value) is bool:
 				if value:
-					condition.append(u'"{0}" = 1'.format(arg))
+					condition.append(u'"{0}" = \'true\''.format(arg))
 				else:
-					condition.append(u'"{0}" = 0'.format(arg))
+					condition.append(u'"{0}" = \'false\''.format(arg))
 			elif type(value) in (float, long, int):
 				condition.append(u'"{0}" = {1}'.format(arg, value))
-oo			#elif value is None:
+			#elif value is None:
 			#	where += u"`%s` is NULL" % key
 			else:
 				condition.append(u"\"{0}\" = '{1}'".format(arg, self._sql.escapeApostrophe(self._sql.escapeBackslash(value))))
@@ -2119,7 +2121,7 @@ oo			#elif value is None:
 
 		hwIdswhere = u' or '.join(
 			[
-				u'`hardware_id` = {0}'.format(hardwareId) for hardwareId in \
+				u'"hardware_id" = {0}'.format(hardwareId) for hardwareId in \
 				self._getHardwareIds(auditHardware)
 			]
 		)
