@@ -24,7 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 @license: GNU Affero GPL version 3
 """
 
-__version__ = '4.0.3.4'
+__version__ = '4.0.5.1'
 
 import base64
 import warnings
@@ -41,6 +41,7 @@ from twisted.conch.ssh import keys
 from OPSI.Logger import Logger
 from OPSI.Types import BackendIOError, BackendBadValueError
 from OPSI.Types import forceInt, forceUnicode
+from OPSI.Backend.Backend import ConfigDataBackend
 from OPSI.Backend.SQLpg import SQL, SQLBackend, SQLBackendObjectModificationTracker
 
 logger = Logger()
@@ -153,10 +154,14 @@ class Postgres(SQL):
 		finally:
 			self._transactionLock.release()
 
-	def connect(self):
+	def connect(self, cursorType=None):
 		myConnectionSuccess = False
 		myMaxRetryConnection = 10
 		myRetryConnectionCounter = 0
+
+		if not cursorType:
+			cursorType = psycopg2.extras.RealDictCursor
+
 		while (not myConnectionSuccess) and (myRetryConnectionCounter < myMaxRetryConnection):
 			try:
 				if (myRetryConnectionCounter > 0):
@@ -166,7 +171,7 @@ class Postgres(SQL):
 				logger.debug(u"Got thread lock")
 				logger.debug(u"Connection pool status: %s" % self._pool.status())
 				conn = self._pool.connect()
-				cursor = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+				cursor = conn.cursor(cursorType)
 				myConnectionSuccess = True
 			except Exception as e:
 				logger.debug(u"Execute error: %s" % e)
@@ -218,6 +223,32 @@ class Postgres(SQL):
 			self.close(conn, cursor)
 		return valueSet
 
+	def getRows(self, query):
+		if not query.lower().startswith("select"):
+			raise BackendIOError(u"getRows method allows select statements only, aborting.")
+		logger.debug2(u"getRows: %s" % query)
+		(conn, cursor) = self.connect(cursorType=MySQLdb.cursors.Cursor)
+		valueSet = []
+		try:
+			try:
+				self.execute(query, conn, cursor)
+			except Exception, e:
+				logger.debug(u"Execute error: %s" % e)
+				if (e[0] != 2006):
+					# 2006: MySQL server has gone away
+					raise
+				self._createConnectionPool()
+				(conn, cursor) = self.connect(cursorType=MySQLdb.cursors.Cursor)
+				self.execute(query, conn, cursor)
+                        valueSet = cursor.fetchall()
+                        if not valueSet:
+                                logger.debug(u"No result for query '%s'" % query)
+                                valueSet = []
+                finally:
+                        self.close(conn, cursor)
+		return valueSet
+
+
 	def getRow(self, query, conn=None, cursor=None):
 		closeConnection = True
 		if conn and cursor:
@@ -258,24 +289,25 @@ class Postgres(SQL):
 			(conn, cursor) = self.connect()
 		result = -1
 		try:
-			colNames = values = u''
+                        colNames = []
+                        values = []
 			for (key, value) in valueHash.items():
-				colNames += u'"%s", ' % key
+                                colNames.append(u'"{0}"'.format(key))
 				if value is None:# or value == '':
-					values += u"NULL, "
+					values.append(u"NULL")
 				elif type(value) is bool:
 					if value:
-						values += u"true, "
+						values.append(u"true")
 					else:
-						values += u"false, "
+						values.append(u"false")
 				elif type(value) in (float, long, int):
-					values += u"%s, " % value
+					values.append(u"{0}".format(value))
 				elif type(value) is str:
-					values += u"\'%s\', " % (u'%s' % self.escapeApostrophe(self.escapeBackslash(value.decode("utf-8"))))
+					values.append(u"\'{0}\'".format(self.escapeApostrophe(self.escapeBackslash(value.decode("utf-8")))))
 				else:
-					values += u"\'%s\', " % (u'%s' % self.escapeApostrophe(self.escapeBackslash(value)))
+					values.append(u"\'{0}\'".format(self.escapeApostrophe(self.escapeBackslash(value))))
 
-			query = u'INSERT INTO "%s" (%s) VALUES (%s);' % (table, colNames[:-2], values[:-2])
+			query = u'INSERT INTO "{0}" ({1}) VALUES ({2});'.format(table, ', '.join(colNames), ', '.join(values))
 			logger.debug2(u"insert: %s" % query)
 			try:
 				self.execute(query, conn, cursor)
@@ -303,26 +335,28 @@ class Postgres(SQL):
 		try:
 			if not valueHash:
 				raise BackendBadValueError(u"No values given")
-			query = u'UPDATE "%s" SET ' % table
+                        query = []
 			for (key, value) in valueHash.items():
-				if value is None and not updateWhereNone:
-					continue
-				query += u'"%s" = ' % key
 				if value is None:
-					query += u"NULL, "
+					if not updateWhereNone:
+						continue
+
+					value = u"NULL"
 				elif type(value) is bool:
 					if value:
-						query += u"true, "
+						value += u"true, "
 					else:
-						query += u"false, "
+						value += u"false, "
 				elif type(value) in (float, long, int):
-					query += u"%s, " % value
+					value += u"%s, " % value
 				elif type(value) is str:
-					query += u"\'%s\', " % (u'%s' % self.escapeApostrophe(self.escapeBackslash(value.decode("utf-8"))))
+					value = u"\'{0}\'".format(self.escapeApostrophe(self.escapeBackslash(value.decode("utf-8"))))
 				else:
-					query += u"\'%s\', " % (u'%s' % self.escapeApostrophe(self.escapeBackslash(value)))
+					value = u"\'{0}\'".format(self.escapeApostrophe(self.escapeBackslash(value)))
 
-			query = u'%s WHERE %s;' % (query[:-2], where)
+				query.append(u"'{0}' = {1}".format(key, value))
+
+			query = u'UPDATE "{0}" SET {1} WHERE {2};'.format(table, ', '.join(query), where)
 			logger.debug2(u"update: %s" % query)
 			try:
 				self.execute(query, conn, cursor)
@@ -460,6 +494,198 @@ class PostgresBackend(SQLBackend):
 		logger.debug(table)
 		self._sql.execute(table)
 		self._sql.execute('CREATE INDEX "index_host_type" on "HOST" ("type");')
+
+	# Overwriting productProperty_insertObject and
+	# productProperty_updateObject to implement Transaction
+	def productProperty_insertObject(self, productProperty):
+		ConfigDataBackend.productProperty_insertObject(self, productProperty)
+		data = self._objectToDatabaseHash(productProperty)
+		possibleValues = data['possibleValues']
+		defaultValues = data['defaultValues']
+		if possibleValues is None:
+			possibleValues = []
+		if defaultValues is None:
+			defaultValues = []
+		del data['possibleValues']
+		del data['defaultValues']
+
+		where = self._uniqueCondition(productProperty)
+		if self._sql.getRow('select * from "PRODUCT_PROPERTY" where %s' % where):
+			self._sql.update("PRODUCT_PROPERTY", where, data, updateWhereNone = True)
+		else:
+			self._sql.insert("PRODUCT_PROPERTY", data)
+
+		if not possibleValues is None:
+			(conn, cursor) = self._sql.connect()
+			myTransactionSuccess = False
+			myMaxRetryTransaction = 10
+			myRetryTransactionCounter = 0
+			while (not myTransactionSuccess) and (myRetryTransactionCounter < myMaxRetryTransaction):
+				try:
+					myRetryTransactionCounter += 1
+					# transaction
+					cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+					self._sql.doCommit = False
+					conn.begin()
+					logger.notice(u'Start Transaction: delete from ppv %d' % myRetryTransactionCounter)
+
+					self._sql.delete('PRODUCT_PROPERTY_VALUE', where, conn, cursor)
+					conn.commit()
+					myTransactionSuccess = True
+				except Exception as e:
+					logger.debug(u"Execute error: %s" % e)
+					if (e.args[0] == 1213):
+						# 1213: 'Deadlock found when trying to get lock; try restarting transaction'
+						# 1213: May be table locked because of concurrent access - retrying
+						myTransactionSuccess = False
+						if (myRetryTransactionCounter >= myMaxRetryTransaction):
+							logger.error(u'Table locked (Code 2013) - giving up after %d retries' % myRetryTransactionCounter)
+							raise
+						else:
+							logger.notice(u'Table locked (Code 2013) - restarting Transaction')
+							time.sleep(0.1)
+					else:
+						logger.error(u'Unknown DB Error: %s' % str(e))
+						raise
+
+				logger.notice(u'End Transaction')
+				self._sql.doCommit = True
+				logger.notice(u'doCommit set to true')
+			self._sql.close(conn,cursor)
+
+		(conn, cursor) = self._sql.connect()
+		for value in possibleValues:
+			try:
+				# transform arguments for sql
+				# from uniqueCondition
+				if (value in defaultValues):
+					myPPVdefault = u'"isDefault" = true'
+				else:
+					myPPVdefault = u'"isDefault" = false'
+
+				if type(value) is bool:
+					if value:
+						myPPVvalue = u'"value" = true'
+					else:
+						myPPVvalue = u'"value" = false'
+				elif type(value) in (float, long, int):
+					myPPVvalue = u'"value" = %s' % (value)
+				else:
+					myPPVvalue = u"\"value\" = '%s'" % (self._sql.escapeApostrophe(self._sql.escapeBackslash(value)))
+				myPPVselect = (
+					u"select * from \"PRODUCT_PROPERTY_VALUE\" where "
+					u"\"propertyId\" = '{0}' AND \"productId\" = '{1}' AND "
+					u"\"productVersion\" = '{2}' AND "
+					u"\"packageVersion\" = '{3}' AND {4} AND {5}".format(
+						data['propertyId'],
+						data['productId'],
+						str(data['productVersion']),
+						str(data['packageVersion']),
+						myPPVvalue,
+						myPPVdefault
+					)
+				)
+				myTransactionSuccess = False
+				myMaxRetryTransaction = 10
+				myRetryTransactionCounter = 0
+				while (not myTransactionSuccess) and (myRetryTransactionCounter < myMaxRetryTransaction):
+					try:
+						myRetryTransactionCounter += 1
+						# transaction
+						cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+						self._sql.doCommit = False
+						conn.begin()
+						logger.notice(u'Start Transaction: insert to ppv %d' % myRetryTransactionCounter)
+						if not self._sql.getRow(myPPVselect , conn, cursor):
+							# self._sql.doCommit = True
+							logger.notice(u'doCommit set to true')
+							self._sql.insert('PRODUCT_PROPERTY_VALUE', {
+								'productId': data['productId'],
+								'productVersion': data['productVersion'],
+								'packageVersion': data['packageVersion'],
+								'propertyId': data['propertyId'],
+								'value': value,
+								'isDefault': (value in defaultValues)
+								}, conn, cursor)
+							conn.commit()
+						else:
+							conn.rollback()
+						myTransactionSuccess = True
+					except Exception as e:
+						logger.debug(u"Execute error: %s" % e)
+						if (e.args[0] == 1213):
+							# 1213: 'Deadlock found when trying to get lock; try restarting transaction'
+							# 1213: May be table locked because of concurrent access - retrying
+							myTransactionSuccess = False
+							if (myRetryTransactionCounter >= myMaxRetryTransaction):
+								logger.error(u'Table locked (Code 2013) - giving up after %d retries' % myRetryTransactionCounter)
+								raise
+							else:
+								logger.notice(u'Table locked (Code 2013) - restarting Transaction')
+								time.sleep(0.1)
+						else:
+							logger.error(u'Unknown DB Error: %s' % str(e))
+							raise
+
+				logger.notice(u'End Transaction')
+			finally:
+				self._sql.doCommit = True
+				logger.notice(u'doCommit set to true')
+		self._sql.close(conn,cursor)
+
+		def productProperty_updateObject(self, productProperty):
+			if not self._sqlBackendModule:
+				raise Exception(u"SQL backend module disabled")
+
+			ConfigDataBackend.productProperty_updateObject(self, productProperty)
+			data = self._objectToDatabaseHash(productProperty)
+			where = self._uniqueCondition(productProperty)
+			possibleValues = data['possibleValues']
+			defaultValues = data['defaultValues']
+			if possibleValues is None:
+				possibleValues = []
+			if defaultValues is None:
+				defaultValues = []
+			del data['possibleValues']
+			del data['defaultValues']
+			self._sql.update('PRODUCT_PROPERTY', where, data)
+
+			if not possibleValues is None:
+				self._sql.delete('PRODUCT_PROPERTY_VALUE', where)
+
+			for value in possibleValues:
+				try:
+					self._sql.doCommit = False
+					logger.notice(u'doCommit set to false')
+					valuesExist = self._sql.getRow(
+						u"select * from \"PRODUCT_PROPERTY_VALUE\" where "
+						u"\"propertyId\" = '{0}' AND \"productId\" = '{1}' AND "
+						u"\"productVersion\" = '{2}' AND \"packageVersion\" = '{3}' "
+						u"AND \"value\" = '{4}' AND \"isDefault\" = {5}".format(
+							data['propertyId'],
+							data['productId'],
+							str(data['productVersion']),
+							str(data['packageVersion']),
+							value,
+							str(value in defaultValues)
+						)
+					)
+					if not valuesExist:
+						self._sql.doCommit = True
+						logger.notice(u'doCommit set to true')
+						self._sql.insert('PRODUCT_PROPERTY_VALUE', {
+							'productId': data['productId'],
+							'productVersion': data['productVersion'],
+							'packageVersion': data['packageVersion'],
+							'propertyId': data['propertyId'],
+							'value': value,
+							'isDefault': (value in defaultValues)
+							}
+						)
+				finally:
+					self._sql.doCommit = True
+					logger.notice(u'doCommit set to true')
+
 
 
 class PostgresBackendObjectModificationTracker(SQLBackendObjectModificationTracker):

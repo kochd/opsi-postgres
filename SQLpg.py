@@ -152,7 +152,7 @@ class SQLBackendObjectModificationTracker(BackendModificationListener):
 	def clearModifications(self, objectClass = None, sinceDate = 0):
 		where ="\"date\" > '%s'" % forceOpsiTimestamp(sinceDate)
 		if objectClass:
-			where += " AND \"objectClass\" = '%s'" % objectClass
+			where = "".join((where, "AND \"objectClass\" = '{0}'".format(objectClass)))
 		self._sql.execute('DELETE FROM "OBJECT_MODIFICATION_TRACKER" WHERE %s' % where)
 
 	def objectInserted(self, backend, obj):
@@ -189,57 +189,58 @@ class SQLBackend(ConfigDataBackend):
 				}
 
 	def _filterToSql(self, filter={}):
-		where = u''
+		"""
+		Creates a SQL condition out of the given filter.
+		"""
+		condition = []
 		for (key, values) in filter.items():
 			if values is None:
 				continue
 			values = forceList(values)
 			if not values:
 				continue
-			if where:
-				where += u' and '
-			where += u'('
+			tmp = []
 			for value in values:
-				operator = '='
 				if type(value) is bool:
 					if value:
-						where += u'"%s" %s %s' % (key, operator, "true")
+						tmp.append(u'"{0}" = 1'.format(key))
 					else:
-						where += u'"%s" %s %s' % (key, operator, "false")
+						tmp.append(u'"{0}" = 0'.format(key))
 				elif type(value) in (float, long, int):
-					where += u'"%s" %s %s' % (key, operator, value)
+					tmp.append(u'"{0}" = {1}'.format(key, value))
 				elif value is None:
-					where += u'"%s" is NULL' % key
+					tmp.append(u'"{0}" is NULL'.format(key))
 				else:
 					value = value.replace(self._sql.ESCAPED_ASTERISK, u'\uffff')
 					value = self._sql.escapeApostrophe(self._sql.escapeBackslash(value))
-					match = re.search('^\s*([>=<]+)\s*(\d\.?\d*)', value)
+					match = self.OPERATOR_IN_CONDITION_PATTERN.search(value)
 					if match:
 						operator = match.group(1)
 						value = match.group(2)
 						value = value.replace(u'\uffff', self._sql.ESCAPED_ASTERISK)
-						where += u'"%s" %s %s' % (key, operator, forceUnicode(value))
+						tmp.append(u'"%s" %s %s' % (key, operator, forceUnicode(value)))
 					else:
-						if (value.find('*') != -1):
+						if '*' in value:
 							operator = 'LIKE'
 							value = self._sql.escapeUnderscore(self._sql.escapePercent(value)).replace('*', '%')
+						else:
+							operator = '='
+
 						value = value.replace(u'\uffff', self._sql.ESCAPED_ASTERISK)
-						where += u"\"%s\" %s '%s'" % (key, operator, forceUnicode(value))
-				where += u' or '
-			where = where[:-4] + u')'
-		return where
+						tmp.append(u"\"{0}\" {1} '{2}'".format(key, operator, forceUnicode(value)))
+			condition.append(u' or '.join(tmp))
+		return u' and '.join([u'({0})'.format(c) for c in condition])
 
 	def _createQuery(self, table, attributes=[], filter={}):
-		select = u''
-		for attribute in attributes:
-			if select:
-				select += u','
-			select += u'"%s"' % attribute
+		select = u','.join(
+			[u'"{0}"'.format(attribute) for attribute in attributes]
+		)
+
 		if not select:
 			select = u'*'
 
 		where = self._filterToSql(filter)
-		query = u''
+#		query = u''
 		if where:
 			query = u'select %s from "%s" where %s' % (select, table, where)
 		else:
@@ -251,27 +252,28 @@ class SQLBackend(ConfigDataBackend):
 		if not attributes:
 			attributes = []
 		# Work on copies of attributes and filter!
-		newAttributes = list(forceUnicodeList(attributes))
-		newFilter = dict(forceDict(filter))
+		# TODO: horribly slow code :<
+		newAttributes = forceUnicodeList(attributes)
+		newFilter = forceDict(filter)
 		id = self._objectAttributeToDatabaseAttribute(objectClass, 'id')
-		if newFilter.has_key('id'):
+		if 'id' in newFilter:
 			newFilter[id] = newFilter['id']
 			del newFilter['id']
 		if 'id' in newAttributes:
 			newAttributes.remove('id')
 			newAttributes.append(id)
-		if 'type' in filter.keys():
+		if 'type' in filter:
 			for oc in forceList(filter['type']):
-				if (objectClass.__name__ == oc):
+				if objectClass.__name__ == oc:
 					newFilter['type'] = forceList(filter['type']).append(objectClass.subClasses.values())
 		if newAttributes:
 			if issubclass(objectClass, Entity) and not 'type' in newAttributes:
 				newAttributes.append('type')
-			objectClasses = [ objectClass ]
+			objectClasses = [objectClass]
 			objectClasses.extend(objectClass.subClasses.values())
 			for oc in objectClasses:
 				for arg in mandatoryConstructorArgs(oc):
-					if (arg == 'id'):
+					if arg == 'id':
 						arg = id
 					if not arg in newAttributes:
 						newAttributes.append(arg)
@@ -286,64 +288,77 @@ class SQLBackend(ConfigDataBackend):
 
 	def _objectToDatabaseHash(self, object):
 		hash = object.toHash()
-		if (object.getType() == 'ProductOnClient'):
-			if hash.has_key('actionSequence'):
+		if object.getType() == 'ProductOnClient':
+			try:
 				del hash['actionSequence']
+			except KeyError:
+				pass  # not there - can be
 
 		if issubclass(object.__class__, Relationship):
-			if hash.has_key('type'):
+			try:
 				del hash['type']
+			except KeyError:
+				pass  # not there - can be
 
 		for (key, value) in hash.items():
 			arg = self._objectAttributeToDatabaseAttribute(object.__class__, key)
-			if (key != arg):
+			if key != arg:
 				hash[arg] = hash[key]
 				del hash[key]
 		return hash
 
 	def _objectAttributeToDatabaseAttribute(self, objectClass, attribute):
-		if (attribute == 'id'):
+		if attribute == 'id':
 			# A class is considered a subclass of itself
 			if issubclass(objectClass, Product):
 				return 'productId'
-			if issubclass(objectClass, Host):
+			elif issubclass(objectClass, Host):
 				return 'hostId'
-			if issubclass(objectClass, Group):
+			elif issubclass(objectClass, Group):
 				return 'groupId'
-			if issubclass(objectClass, Config):
+			elif issubclass(objectClass, Config):
 				return 'configId'
-			if issubclass(objectClass, LicenseContract):
+			elif issubclass(objectClass, LicenseContract):
 				return 'licenseContractId'
-			if issubclass(objectClass, SoftwareLicense):
+			elif issubclass(objectClass, SoftwareLicense):
 				return 'softwareLicenseId'
-			if issubclass(objectClass, LicensePool):
+			elif issubclass(objectClass, LicensePool):
 				return 'licensePoolId'
 		return attribute
 
 	def _uniqueCondition(self, object):
-		condition = u''
+		"""
+		Creates an unique condition that can be used in the WHERE part
+		of an SQL query to identify an object.
+		To achieve this the constructor of the object is inspected.
+		Objects must have an attribute named like the parameter.
+
+		:param object: The object to create an condition for.
+		:returntype: str
+		"""
+		condition = []
+
 		args = mandatoryConstructorArgs(object.__class__)
 		for arg in args:
 			value = getattr(object, arg)
 			if value is None:
 				continue
 			arg = self._objectAttributeToDatabaseAttribute(object.__class__, arg)
-			if condition:
-				condition += u' and '
 			if type(value) is bool:
 				if value:
-					condition += u'"%s" = %s' % (arg, 1)
+					condition.append(u'"{0}" = 1'.format(arg))
 				else:
-					condition += u'"%s" = %s' % (arg, 0)
+					condition.append(u'"{0}" = 0'.format(arg))
 			elif type(value) in (float, long, int):
-				condition += u'"%s" = %s' % (arg, value)
-			#elif value is None:
+				condition.append(u'"{0}" = {1}'.format(arg, value))
+oo			#elif value is None:
 			#	where += u"`%s` is NULL" % key
 			else:
-				condition += u"\"%s\" = '%s'" % (arg, self._sql.escapeApostrophe(self._sql.escapeBackslash(value)))
+				condition.append(u"\"{0}\" = '{1}'".format(arg, self._sql.escapeApostrophe(self._sql.escapeBackslash(value))))
 		if isinstance(object, HostGroup) or isinstance(object, ProductGroup):
-			condition += u" and 'type' = '%s'" % object.getType()
-		return condition
+			condition.append(u"'type' = '{0}'".format(object.getType()))
+
+		return ' and '.join(condition)
 
 	def _objectExists(self, table, object):
 		query = 'select * from "%s" where %s' % (table, self._uniqueCondition(object))
@@ -914,7 +929,7 @@ class SQLBackend(ConfigDataBackend):
 		data = self._objectToDatabaseHash(host)
 		where = self._uniqueCondition(host)
 		if self._sql.getRow('select * from "HOST" where %s' % where):
-			self._sql.update('HOST', where, data, updateWhereNone = True)
+			self._sql.update('HOST', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('HOST', data)
 
@@ -962,7 +977,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(config)
 		if self._sql.getRow('select * from "CONFIG" where %s' % where):
-			self._sql.update('CONFIG', where, data, updateWhereNone = True)
+			self._sql.update('CONFIG', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('CONFIG', data)
 
@@ -1054,7 +1069,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(configState)
 		if self._sql.getRow('select * from "CONFIG_STATE" where %s' % where):
-			self._sql.update('CONFIG_STATE', where, data, updateWhereNone = True)
+			self._sql.update('CONFIG_STATE', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('CONFIG_STATE', data)
 
@@ -1095,7 +1110,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(product)
 		if self._sql.getRow('select * from "PRODUCT" where %s' % where):
-			self._sql.update('PRODUCT', where, data, updateWhereNone = True)
+			self._sql.update('PRODUCT', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('PRODUCT', data)
 
@@ -1158,115 +1173,21 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(productProperty)
 		if self._sql.getRow('select * from "PRODUCT_PROPERTY" where %s' % where):
-			self._sql.update('PRODUCT_PROPERTY', where, data, updateWhereNone = True)
+			self._sql.update('PRODUCT_PROPERTY', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('PRODUCT_PROPERTY', data)
 
 		if not possibleValues is None:
-			(conn, cursor) = self._sql.connect()
-			myTransactionSuccess = False
-			myMaxRetryTransaction = 10
-			myRetryTransactionCounter = 0
-			while (not myTransactionSuccess) and (myRetryTransactionCounter < myMaxRetryTransaction):
-				try:
-					myRetryTransactionCounter += 1
-					# transaction
-					cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-					self._sql.doCommit = False
-					logger.debug(u'Start Transaction: delete from ppv %d' % myRetryTransactionCounter)
-
-					self._sql.delete('PRODUCT_PROPERTY_VALUE', where, conn, cursor)
-					conn.commit()
-					myTransactionSuccess = True
-				except Exception as e:
-					logger.debug(u"Execute error: %s" % e)
-					if (e.args[0] == 1213):
-						# 1213: 'Deadlock found when trying to get lock; try restarting transaction'
-						# 1213: May be table locked because of concurrent access - retrying
-						myTransactionSuccess = False
-						if (myRetryTransactionCounter >= myMaxRetryTransaction):
-							logger.error(u'Table locked (Code 2013) - giving up after %d retries' % myRetryTransactionCounter)
-							raise
-						else:
-							logger.debug(u'Table locked (Code 2013) - restarting Transaction')
-							time.sleep(0.1)
-					else:
-						logger.error(u'Unknown DB Error: %s' % str(e))
-						raise
-
-				logger.debug(u'End Transaction')
-				self._sql.doCommit = True
-				logger.debug(u'doCommit set to true')
-			self._sql.close(conn,cursor)
-
-		(conn, cursor) = self._sql.connect()
+			self._sql.delete('PRODUCT_PROPERTY_VALUE', where)
 		for value in possibleValues:
-			try:
-				# transform arguments for sql
-				# from uniqueCondition
-				if (value in defaultValues):
-					myPPVdefault = u"\"isDefault\" = 'true'"
-				else:
-					myPPVdefault = u"\"isDefault\" = 'false'"
-
-				if type(value) is bool:
-					if value:
-						myPPVvalue = u"\"value\" = 'true'"
-					else:
-						myPPVvalue = u"\"value\" = 'false'"
-				elif type(value) in (float, long, int):
-					myPPVvalue = u"\"value\" = %s" % (value)
-				else:
-					myPPVvalue = u"\"value\" = '%s'" % (self._sql.escapeApostrophe(self._sql.escapeBackslash(value)))
-				myPPVselect = u"select * from \"PRODUCT_PROPERTY_VALUE\" where " \
-					+ u"\"propertyId\" = '%s' AND \"productId\" = '%s' AND \"productVersion\" = '%s' AND \"packageVersion\" = '%s'" \
-					% (data['propertyId'], data['productId'], str(data['productVersion']), str(data['packageVersion'])) \
-					+ u" AND "+myPPVvalue+u" AND "+myPPVdefault
-				myTransactionSuccess = False
-				myMaxRetryTransaction = 10
-				myRetryTransactionCounter = 0
-				while (not myTransactionSuccess) and (myRetryTransactionCounter < myMaxRetryTransaction):
-					try:
-						myRetryTransactionCounter += 1
-						# transaction
-						cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-						self._sql.doCommit = False
-						logger.debug(u'Start Transaction: insert to ppv %d' % myRetryTransactionCounter)
-						if not self._sql.getRow(myPPVselect , conn, cursor):
-							logger.debug(u'doCommit set to true')
-							self._sql.insert('PRODUCT_PROPERTY_VALUE', {
-								'productId': data['productId'],
-								'productVersion': data['productVersion'],
-								'packageVersion': data['packageVersion'],
-								'propertyId': data['propertyId'],
-								'value': value,
-								'isDefault': (value in defaultValues)
-								}, conn, cursor)
-							conn.commit()
-						else:
-							conn.rollback()
-						myTransactionSuccess = True
-					except Exception as e:
-						logger.debug(u"Execute error: %s" % e)
-						if (e.args[0] == 1213):
-							# 1213: 'Deadlock found when trying to get lock; try restarting transaction'
-							# 1213: May be table locked because of concurrent access - retrying
-							myTransactionSuccess = False
-							if (myRetryTransactionCounter >= myMaxRetryTransaction):
-								logger.error(u'Table locked (Code 2013) - giving up after %d retries' % myRetryTransactionCounter)
-								raise
-							else:
-								logger.debug(u'Table locked (Code 2013) - restarting Transaction')
-								time.sleep(0.1)
-						else:
-							logger.error(u'Unknown DB Error: %s' % str(e))
-							raise
-
-				logger.debug(u'End Transaction')
-			finally:
-				self._sql.doCommit = True
-				logger.debug(u'doCommit set to true')
-		self._sql.close(conn,cursor)
+			self._sql.insert('PRODUCT_PROPERTY_VALUE', {
+					'productId': data['productId'],
+					'productVersion': data['productVersion'],
+					'packageVersion': data['packageVersion'],
+					'propertyId': data['propertyId'],
+					'value': value,
+					'isDefault': (value in defaultValues)
+					})
 
 	def productProperty_updateObject(self, productProperty):
 		ConfigDataBackend.productProperty_updateObject(self, productProperty)
@@ -1286,25 +1207,14 @@ class SQLBackend(ConfigDataBackend):
 			self._sql.delete('PRODUCT_PROPERTY_VALUE', where)
 
 		for value in possibleValues:
-			try:
-				self._sql.doCommit = False
-				logger.debug(u'doCommit set to false')
-				if not self._sql.getRow(u"select * from \"PRODUCT_PROPERTY_VALUE\" where " \
-						+ u"\"propertyId\" = '%s' AND \"productId\" = '%s' AND \"productVersion\" = '%s' AND \"packageVersion\" = '%s' AND \"value\" = '%s' AND \"isDefault\" = %s" \
-						% (data['propertyId'], data['productId'], str(data['productVersion']), str(data['packageVersion']), value, str(value in defaultValues))):
-					self._sql.doCommit = True
-					logger.debug(u'doCommit set to true')
-					self._sql.insert('PRODUCT_PROPERTY_VALUE', {
-					        'productId': data['productId'],
-					        'productVersion': data['productVersion'],
-					        'packageVersion': data['packageVersion'],
-					        'propertyId': data['propertyId'],
-					        'value': value,
-					        'isDefault': (value in defaultValues)
-					        })
-			finally:
-				self._sql.doCommit = True
-				logger.debug(u'doCommit set to true')
+			self._sql.insert('PRODUCT_PROPERTY_VALUE', {
+					'productId': data['productId'],
+					'productVersion': data['productVersion'],
+					'packageVersion': data['packageVersion'],
+					'propertyId': data['propertyId'],
+					'value': value,
+					'isDefault': (value in defaultValues)
+					})
 
 	def productProperty_getObjects(self, attributes=[], **filter):
 		ConfigDataBackend.productProperty_getObjects(self, attributes=[], **filter)
@@ -1315,9 +1225,17 @@ class SQLBackend(ConfigDataBackend):
 			res['possibleValues'] = []
 			res['defaultValues'] = []
 			if not attributes or 'possibleValues' in attributes or 'defaultValues' in attributes:
-				for res2 in self._sql.getSet(u"select * from \"PRODUCT_PROPERTY_VALUE\" where " \
-					+ u"\"propertyId\" = '%s' AND \"productId\" = '%s' AND \"productVersion\" = '%s' AND \"packageVersion\" = '%s'" \
-					% (res['propertyId'], res['productId'], res['productVersion'], res['packageVersion'])):
+				for res2 in self._sql.getSet(
+					u"select * from \"PRODUCT_PROPERTY_VALUE\" where "
+					u"\"propertyId\" = '{0}' AND \"productId\" = '{1}' AND "
+					u"\"productVersion\" = '{2}' AND "
+					u"\"packageVersion\" = '{3}'".format(
+						res['propertyId'],
+						res['productId'],
+						res['productVersion'],
+						res['packageVersion']
+					)):
+
 					res['possibleValues'].append(res2['value'])
 					if res2['isDefault']:
 						res['defaultValues'].append(res2['value'])
@@ -1341,7 +1259,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(productDependency)
 		if self._sql.getRow('select * from "PRODUCT_DEPENDENCY" where %s' % where):
-			self._sql.update('PRODUCT_DEPENDENCY', where, data, updateWhereNone = True)
+			self._sql.update('PRODUCT_DEPENDENCY', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('PRODUCT_DEPENDENCY', data)
 
@@ -1375,13 +1293,13 @@ class SQLBackend(ConfigDataBackend):
 		ConfigDataBackend.productOnDepot_insertObject(self, productOnDepot)
 		data = self._objectToDatabaseHash(productOnDepot)
 
-		productOnDepotClone = productOnDepot.clone(identOnly = True)
+		productOnDepotClone = productOnDepot.clone(identOnly=True)
 		productOnDepotClone.productVersion = None
 		productOnDepotClone.packageVersion = None
 		productOnDepotClone.productType = None
 		where = self._uniqueCondition(productOnDepotClone)
 		if self._sql.getRow('select * from "PRODUCT_ON_DEPOT" where %s' % where):
-			self._sql.update('PRODUCT_ON_DEPOT', where, data, updateWhereNone = True)
+			self._sql.update('PRODUCT_ON_DEPOT', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('PRODUCT_ON_DEPOT', data)
 
@@ -1413,14 +1331,14 @@ class SQLBackend(ConfigDataBackend):
 		ConfigDataBackend.productOnClient_insertObject(self, productOnClient)
 		data = self._objectToDatabaseHash(productOnClient)
 
-		productOnClientClone = productOnClient.clone(identOnly = True)
+		productOnClientClone = productOnClient.clone(identOnly=True)
 		productOnClientClone.productVersion = None
 		productOnClientClone.packageVersion = None
 		productOnClientClone.productType = None
 		where = self._uniqueCondition(productOnClientClone)
 
 		if self._sql.getRow('select * from "PRODUCT_ON_CLIENT" where %s' % where):
-			self._sql.update('PRODUCT_ON_CLIENT', where, data, updateWhereNone = True)
+			self._sql.update('PRODUCT_ON_CLIENT', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('PRODUCT_ON_CLIENT', data)
 
@@ -1458,7 +1376,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(productPropertyState)
 		if self._sql.getRow('select * from "PRODUCT_PROPERTY_STATE" where %s' % where):
-			self._sql.update('PRODUCT_PROPERTY_STATE', where, data, updateWhereNone = True)
+			self._sql.update('PRODUCT_PROPERTY_STATE', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('PRODUCT_PROPERTY_STATE', data)
 
@@ -1475,8 +1393,10 @@ class SQLBackend(ConfigDataBackend):
 		productPropertyStates = []
 		(attributes, filter) = self._adjustAttributes(ProductPropertyState, attributes, filter)
 		for res in self._sql.getSet(self._createQuery('PRODUCT_PROPERTY_STATE', attributes, filter)):
-			if res.has_key('values'):
+                        try:
 				res['values'] = json.loads(res['values'])
+                        except KeyError:
+				pass  # Could be non-existing and it would be okay.
 			productPropertyStates.append(ProductPropertyState.fromHash(res))
 		return productPropertyStates
 
@@ -1496,7 +1416,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(group)
 		if self._sql.getRow('select * from "GROUP" where %s' % where):
-			self._sql.update('GROUP', where, data, updateWhereNone = True)
+			self._sql.update('GROUP', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('GROUP', data)
 
@@ -1532,7 +1452,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(objectToGroup)
 		if self._sql.getRow('select * from "OBJECT_TO_GROUP" where %s' % where):
-			self._sql.update('OBJECT_TO_GROUP', where, data, updateWhereNone = True)
+			self._sql.update('OBJECT_TO_GROUP', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('OBJECT_TO_GROUP', data)
 
@@ -1571,7 +1491,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(licenseContract)
 		if self._sql.getRow('select * from "LICENSE_CONTRACT" where %s' % where):
-			self._sql.update('LICENSE_CONTRACT', where, data, updateWhereNone = True)
+			self._sql.update('LICENSE_CONTRACT', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('LICENSE_CONTRACT', data)
 
@@ -1627,7 +1547,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(softwareLicense)
 		if self._sql.getRow('select * from "SOFTWARE_LICENSE" where %s' % where):
-			self._sql.update('SOFTWARE_LICENSE', where, data, updateWhereNone = True)
+			self._sql.update('SOFTWARE_LICENSE', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('SOFTWARE_LICENSE', data)
 
@@ -1678,7 +1598,7 @@ class SQLBackend(ConfigDataBackend):
 		modules = backendinfo['modules']
 		helpermodules = backendinfo['realmodules']
 
-		publicKey = keys.Key.fromString(data = base64.decodestring('AAAAB3NzaC1yc2EAAAADAQABAAABAQCAD/I79Jd0eKwwfuVwh5B2z+S8aV0C5suItJa18RrYip+d4P0ogzqoCfOoVWtDojY96FDYv+2d73LsoOckHCnuh55GA0mtuVMWdXNZIE8Avt/RzbEoYGo/H0weuga7I8PuQNC/nyS8w3W8TH4pt+ZCjZZoX8S+IizWCYwfqYoYTMLgB0i+6TCAfJj3mNgCrDZkQ24+rOFS4a8RrjamEz/b81noWl9IntllK1hySkR+LbulfTGALHgHkDUlk0OSu+zBPw/hcDSOMiDQvvHfmR4quGyLPbQ2FOVm1TzE0bQPR+Bhx4V8Eo2kNYstG2eJELrz7J1TJI0rCjpB+FQjYPsP')).keyObject
+		publicKey = keys.Key.fromString(data=base64.decodestring('AAAAB3NzaC1yc2EAAAADAQABAAABAQCAD/I79Jd0eKwwfuVwh5B2z+S8aV0C5suItJa18RrYip+d4P0ogzqoCfOoVWtDojY96FDYv+2d73LsoOckHCnuh55GA0mtuVMWdXNZIE8Avt/RzbEoYGo/H0weuga7I8PuQNC/nyS8w3W8TH4pt+ZCjZZoX8S+IizWCYwfqYoYTMLgB0i+6TCAfJj3mNgCrDZkQ24+rOFS4a8RrjamEz/b81noWl9IntllK1hySkR+LbulfTGALHgHkDUlk0OSu+zBPw/hcDSOMiDQvvHfmR4quGyLPbQ2FOVm1TzE0bQPR+Bhx4V8Eo2kNYstG2eJELrz7J1TJI0rCjpB+FQjYPsP')).keyObject
 		data = u''; mks = modules.keys(); mks.sort()
 		for module in mks:
 			if module in ('valid', 'signature'):
@@ -1705,7 +1625,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(licensePool)
 		if self._sql.getRow('select * from "LICENSE_POOL" where %s' % where):
-			self._sql.update('LICENSE_POOL', where, data, updateWhereNone = True)
+			self._sql.update('LICENSE_POOL', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('LICENSE_POOL', data)
 
@@ -1785,7 +1705,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(softwareLicenseToLicensePool)
 		if self._sql.getRow('select * from "SOFTWARE_LICENSE_TO_LICENSE_POOL" where %s' % where):
-			self._sql.update('SOFTWARE_LICENSE_TO_LICENSE_POOL', where, data, updateWhereNone = True)
+			self._sql.update('SOFTWARE_LICENSE_TO_LICENSE_POOL', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('SOFTWARE_LICENSE_TO_LICENSE_POOL', data)
 
@@ -1836,7 +1756,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(licenseOnClient)
 		if self._sql.getRow('select * from "LICENSE_ON_CLIENT" where %s' % where):
-			self._sql.update('LICENSE_ON_CLIENT', where, data, updateWhereNone = True)
+			self._sql.update('LICENSE_ON_CLIENT', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('LICENSE_ON_CLIENT', data)
 
@@ -1883,7 +1803,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(auditSoftware)
 		if self._sql.getRow('select * from "SOFTWARE" where %s' % where):
-			self._sql.update('SOFTWARE', where, data, updateWhereNone = True)
+			self._sql.update('SOFTWARE', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('SOFTWARE', data)
 
@@ -1921,7 +1841,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(auditSoftwareToLicensePool)
 		if self._sql.getRow('select * from "AUDIT_SOFTWARE_TO_LICENSE_POOL" where %s' % where):
-			self._sql.update('AUDIT_SOFTWARE_TO_LICENSE_POOL', where, data, updateWhereNone = True)
+			self._sql.update('AUDIT_SOFTWARE_TO_LICENSE_POOL', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('AUDIT_SOFTWARE_TO_LICENSE_POOL', data)
 
@@ -1961,7 +1881,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(auditSoftwareOnClient)
 		if self._sql.getRow('select * from "SOFTWARE_CONFIG" where %s' % where):
-			self._sql.update('SOFTWARE_CONFIG', where, data, updateWhereNone = True)
+			self._sql.update('SOFTWARE_CONFIG', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('SOFTWARE_CONFIG', data)
 
@@ -1997,19 +1917,17 @@ class SQLBackend(ConfigDataBackend):
 		if hasattr(auditHardware, 'toHash'):
 			auditHardware = auditHardware.toHash()
 
-		condition = u''
+		condition = []
 		for (attribute, value) in auditHardware.items():
 			if attribute in ('hardwareClass', 'type'):
 				continue
-			if condition:
-				condition += u' and '
-			if value is None or (value == [None]):
-				condition += u'"%s" is NULL' % attribute
+			if value is None or value == [None]:
+				condition.append(u'"{0}" is NULL'.format(attribute))
 			elif type(value) in (float, long, int, bool):
-				condition += u'"%s" = %s' % (attribute, value)
+				condition.append(u'"{0}" = {1}'.format(attribute, value))
 			else:
-				condition += u"\"%s\" = '%s'" % (attribute, self._sql.escapeApostrophe(self._sql.escapeBackslash(value)))
-		return condition
+				condition.append(u"\"{0}\" = '{1}'".format(attribute, self._sql.escapeApostrophe(self._sql.escapeBackslash(value))))
+		return u' and '.join(condition)
 
 	def _getHardwareIds(self, auditHardware):
 		if hasattr(auditHardware, 'toHash'):
@@ -2017,12 +1935,12 @@ class SQLBackend(ConfigDataBackend):
 
 		for (attribute, value) in auditHardware.items():
 			if value is None:
-				auditHardware[attribute] = [ None ]
+				auditHardware[attribute] = [None]
 			elif type(value) is unicode:
 				auditHardware[attribute] = self._sql.escapeAsterisk(value)
 
 		logger.debug(u"Getting hardware ids, filter %s" % auditHardware)
-		hardwareIds = self._auditHardware_search(returnHardwareIds = True, attributes=[], **auditHardware)
+		hardwareIds = self._auditHardware_search(returnHardwareIds=True, attributes=[], **auditHardware)
 		logger.debug(u"Found hardware ids: %s" % hardwareIds)
 		return hardwareIds
 
@@ -2033,7 +1951,7 @@ class SQLBackend(ConfigDataBackend):
 		filter = {}
 		for (attribute, value) in auditHardware.toHash().items():
 			if value is None:
-				filter[attribute] = [ None ]
+				filter[attribute] = [None]
 			elif type(value) is unicode:
 				filter[attribute] = self._sql.escapeAsterisk(value)
 			else:
@@ -2089,10 +2007,11 @@ class SQLBackend(ConfigDataBackend):
 			for key in self._auditHardwareConfig.keys():
 				hardwareClasses.append(key)
 
-		if filter.has_key('hardwareClass'):
-			del filter['hardwareClass']
-		if filter.has_key('type'):
-			del filter['type']
+		for unwanted_key in ('hardwareClass', 'type'):
+			try:
+				del filter[unwanted_key]
+			except KeyError:
+				pass  # not there - everything okay.
 
 		if 'hardwareClass' in attributes:
 			attributes.remove('hardwareClass')
@@ -2130,13 +2049,13 @@ class SQLBackend(ConfigDataBackend):
 				if returnHardwareIds:
 					results.append(res['hardware_id'])
 					continue
-				elif res.has_key('hardware_id'):
+				elif 'hardware_id' in res:
 					del res['hardware_id']
 				res['hardwareClass'] = hardwareClass
 				for (attribute, valueInfo) in self._auditHardwareConfig[hardwareClass].items():
 					if (valueInfo.get('Scope', 'g') == 'i'):
 						continue
-					if not res.has_key(attribute):
+					if attribute not in res:
 						res[attribute] = None
 				results.append(res)
 		return results
@@ -2160,25 +2079,22 @@ class SQLBackend(ConfigDataBackend):
 
 		hardwareClass = auditHardwareOnHost['hardwareClass']
 
-		auditHardware = { 'type': 'AuditHardware' }
+		auditHardware = {'type': 'AuditHardware'}
 		auditHardwareOnHostNew = {}
 		for (attribute, value) in auditHardwareOnHost.items():
-			#if value is None or (attribute == 'type'):
-			#	continue
-			if (attribute == 'type'):
+			if attribute == 'type':
 				continue
-			if attribute in ('hostId', 'state', 'firstseen', 'lastseen'):
+			elif attribute in ('hostId', 'state', 'firstseen', 'lastseen'):
 				auditHardwareOnHostNew[attribute] = value
 				continue
-			if attribute in ('hardwareClass',):
+			elif attribute in 'hardwareClass':
 				auditHardware[attribute] = value
 				auditHardwareOnHostNew[attribute] = value
 				continue
 			valueInfo = self._auditHardwareConfig[hardwareClass].get(attribute)
 			if valueInfo is None:
 				raise BackendConfigurationError(u"Attribute '%s' not found in config of hardware class '%s'" % (attribute, hardwareClass))
-			scope = valueInfo.get('Scope', '')
-			if (scope == 'g'):
+			if valueInfo.get('Scope', '') == 'g':
 				auditHardware[attribute] = value
 				continue
 			auditHardwareOnHostNew[attribute] = value
@@ -2188,13 +2104,12 @@ class SQLBackend(ConfigDataBackend):
 	def _uniqueAuditHardwareOnHostCondition(self, auditHardwareOnHost):
 		(auditHardware, auditHardwareOnHost) = self._extractAuditHardwareHash(auditHardwareOnHost)
 
-		hardwareClass = auditHardwareOnHost['hardwareClass']
 		del auditHardwareOnHost['hardwareClass']
 
 		filter = {}
-		for (attribute, value) in auditHardwareOnHost.items():
+		for (attribute, value) in auditHardwareOnHost.iteritems():
 			if value is None:
-				filter[attribute] = [ None ]
+				filter[attribute] = [None]
 			elif type(value) is unicode:
 				filter[attribute] = self._sql.escapeAsterisk(value)
 			else:
@@ -2202,13 +2117,20 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._filterToSql(filter)
 
-		hwIdswhere = u''
-		for hardwareId in self._getHardwareIds(auditHardware):
-			if hwIdswhere: hwIdswhere += u' or '
-			hwIdswhere += u'"hardware_id" = %s' % hardwareId
+		hwIdswhere = u' or '.join(
+			[
+				u'`hardware_id` = {0}'.format(hardwareId) for hardwareId in \
+				self._getHardwareIds(auditHardware)
+			]
+		)
 		if not hwIdswhere:
 			raise BackendReferentialIntegrityError(u"Hardware device %s not found" % auditHardware)
-		return where + u' and (%s)' % hwIdswhere
+		return ' and '.join(
+			(
+				where,
+				hwIdswhere.join((u'(', u')'))
+			)
+		)
 
 	def _auditHardwareOnHostObjectToDatabaseHash(self, auditHardwareOnHost):
 		(auditHardware, auditHardwareOnHost) = self._extractAuditHardwareHash(auditHardwareOnHost)
@@ -2273,13 +2195,14 @@ class SQLBackend(ConfigDataBackend):
 			for key in self._auditHardwareConfig.keys():
 				hardwareClasses.append(key)
 
-		if filter.has_key('hardwareClass'):
-			del filter['hardwareClass']
-		if filter.has_key('type'):
-			del filter['type']
+		for unwanted_key in ('hardwareClass', 'type'):
+			try:
+				del filter[unwanted_key]
+			except KeyError:
+				pass  # not there - everything okay.
 
 		for attribute in attributes:
-			if not filter.has_key(attribute):
+			if attribute not in filter:
 				filter[attribute] = None
 
 		for hardwareClass in hardwareClasses:
@@ -2329,11 +2252,13 @@ class SQLBackend(ConfigDataBackend):
 				data.update(res)
 				data['hardwareClass'] = hardwareClass
 				del data['hardware_id']
-				if data.has_key('config_id'):
+                                try:
 					del data['config_id']
+                                except KeyError:
+                                        pass # not there - everything okay
 
 				for attribute in self._auditHardwareConfig[hardwareClass].keys():
-					if not data.has_key(attribute):
+					if attribute not in data:
 						data[attribute] = None
 				hashes.append(data)
 		return hashes
@@ -2363,7 +2288,7 @@ class SQLBackend(ConfigDataBackend):
 
 		where = self._uniqueCondition(bootConfiguration)
 		if self._sql.getRow('select * from "BOOT_CONFIGURATION" where %s' % where):
-			self._sql.update('BOOT_CONFIGURATION', where, data, updateWhereNone = True)
+			self._sql.update('BOOT_CONFIGURATION', where, data, updateWhereNone=True)
 		else:
 			self._sql.insert('BOOT_CONFIGURATION', data)
 
@@ -2389,3 +2314,21 @@ class SQLBackend(ConfigDataBackend):
 			logger.info(u"Deleting bootConfiguration %s" % bootConfiguration)
 			where = self._uniqueCondition(bootConfiguration)
 			self._sql.delete('BOOT_CONFIGURATION', where)
+
+
+	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	# -   Extension for direct connect to db                                           -
+	# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	def getData(self, query):
+                # result = ConfigDataBackend.getData(self, query)
+                logger.debug(u'start query {0}'.format(query))
+                result = self._sql.getSet(query)
+                logger.debug(u'ended query {0}'.format(query))
+                return result
+
+	def getRawData(self, query):
+                # result = ConfigDataBackend.getRawData(self, query)
+                logger.debug(u'start query {0}'.format(query))
+                result = self._sql.getRows(query)
+                logger.debug(u'ended query {0}'.format(query))
+                return result
