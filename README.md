@@ -22,7 +22,7 @@ sudo -u postgres psql            # open the psql cli
 </pre>
 
 ### Copy files
-* Copy Postgres.py and SQLpg.py to your pymodules destination ( e.g. /usr/lib/pymodules/python2.7/OPSI/Backend/ )
+* Copy Postgres.py and SQLpg.py to your pymodules destination ( e.g. /usr/lib/python2.7/dist-packages/OPSI/Backend/ )
 * Copy opsihwaudit.conf to /etc/opsi/hwaudit/
 * Copy postgres.conf to /etc/opsi/backends/
 
