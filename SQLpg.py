@@ -1973,7 +1973,15 @@ class SQLBackend(ConfigDataBackend):
 
 	def auditSoftwareOnClient_getHashes(self, attributes=[], **filter):
 		(attributes, filter) = self._adjustAttributes(AuditSoftwareOnClient, attributes, filter)
-		return self._sql.getSet(self._createQuery('SOFTWARE_CONFIG', attributes, filter))
+		result = self._sql.getSet(self._createQuery('SOFTWARE_CONFIG', attributes, filter))
+
+		# this fixes the problem that datetime.datime types cannot be converted to json
+		# convert them to str first
+		for r in result:
+			r['lastUsed'] = str(r['lastUsed'])
+			r['firstseen'] = str(r['firstseen'])
+			r['lastseen'] = str(r['lastseen'])
+		return result
 
 	def auditSoftwareOnClient_getObjects(self, attributes=[], **filter):
 		ConfigDataBackend.auditSoftwareOnClient_getObjects(self, attributes=[], **filter)
