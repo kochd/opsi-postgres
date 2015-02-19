@@ -14,11 +14,11 @@ I need to know the bugs in order to fix them.
 First of all you have to setup a postgres database and create a user.
 
 <pre>
-apt-get install postgres sudo    # Install postgres and sudo
-sudo -u postgres createuser opsi # create the user opsi
-sudo -u postgres createdb opsi   # create the database opsi
-sudo -u postgres psql            # open the psql cli
-\password opsi                   # change password for user opsi
+apt-get install postgres sudo python-psycopg2 # Install postgres, sudo and libs
+sudo -u postgres createuser opsi              # create the user opsi
+sudo -u postgres createdb opsi                # create the database opsi
+sudo -u postgres psql                         # open the psql cli
+\password opsi                                # change password for user opsi
 </pre>
 
 ### Copy files
