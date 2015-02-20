@@ -3,7 +3,7 @@
 """
 opsi python library - Postgres
 
-Copyright (C) 2014 Daniel Koch
+Copyright (C) 2014-2015 Daniel Koch
 
 All rights reserved.
 
@@ -24,7 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 @license: GNU Affero GPL version 3
 """
 
-__version__ = '4.0.5.1'
+__version__ = '4.0.6.1'
 
 import base64
 import warnings
@@ -108,21 +108,21 @@ class Postgres(SQL):
 		# Parse arguments
 		for (option, value) in kwargs.items():
 			option = option.lower()
-			if   option in ('address',):
+			if option == 'address':
 				self._address = forceUnicode(value)
-			elif option in ('username',):
+			elif option == 'username':
 				self._username = forceUnicode(value)
-			elif option in ('password'):
+			elif option == 'password':
 				self._password = forceUnicode(value)
-			elif option in ('database',):
+			elif option == 'database':
 				self._database = forceUnicode(value)
-			elif option in ('databasecharset',):
+			elif option == 'databasecharset':
 				self._databaseCharset = str(value)
-			elif option in ('connectionpoolsize',):
+			elif option == 'connectionpoolsize':
 				self._connectionPoolSize = forceInt(value)
-			elif option in ('connectionpoolmaxoverflow',):
+			elif option == 'connectionpoolmaxoverflow':
 				self._connectionPoolMaxOverflow = forceInt(value)
-			elif option in ('connectionpooltimeout',):
+			elif option == 'connectionpooltimeout':
 				self._connectionPoolTimeout = forceInt(value)
 
 		self._transactionLock = threading.Lock()
@@ -161,7 +161,7 @@ class Postgres(SQL):
 
 		while (not myConnectionSuccess) and (myRetryConnectionCounter < myMaxRetryConnection):
 			try:
-				if (myRetryConnectionCounter > 0):
+				if myRetryConnectionCounter > 0:
 					self._createConnectionPool()
 				logger.debug(u"Connecting to connection pool")
 				self._transactionLock.acquire()
@@ -199,6 +199,7 @@ class Postgres(SQL):
 			self._transactionLock.release()
 
 	def getSet(self, query):
+		logger.debug2(u"getSet: %s" % query)
 		(conn, cursor) = self.connect()
 		valueSet = []
 		try:
@@ -206,7 +207,7 @@ class Postgres(SQL):
 				self.execute(query, conn, cursor)
 			except Exception as e:
 				logger.debug(u"Execute error: %s" % e)
-				if (e[0] != 2006):
+				if e[0] != 2006:
 					# 2006: PgSQL server has gone away
 					raise
 				self._createConnectionPool()
@@ -232,7 +233,7 @@ class Postgres(SQL):
 				self.execute(query, conn, cursor)
 			except Exception, e:
 				logger.debug(u"Execute error: %s" % e)
-				if (e[0] != 2006):
+				if e[0] != 2006:
 					# 2006: MySQL server has gone away
 					raise
 				self._createConnectionPool()
@@ -248,6 +249,7 @@ class Postgres(SQL):
 
 
 	def getRow(self, query, conn=None, cursor=None):
+		logger.debug2(u"getRow: %s" % query)
 		closeConnection = True
 		if conn and cursor:
 			logger.debug(u"TRANSACTION: conn and cursor given, so we should not close the connection.")
@@ -260,7 +262,7 @@ class Postgres(SQL):
 				self.execute(query, conn, cursor)
 			except Exception as e:
 				logger.debug(u"Execute error: %s" % e)
-				if (e[0] != 2006):
+				if e[0] != 2006:
 					# 2006: PgSQL server has gone away
 					raise
 				self._createConnectionPool()
@@ -291,7 +293,7 @@ class Postgres(SQL):
                         values = []
 			for (key, value) in valueHash.items():
                                 colNames.append(u'"{0}"'.format(key))
-				if value is None:# or value == '':
+				if value is None:
 					values.append(u"NULL")
 				elif type(value) is bool:
 					if value:
@@ -310,12 +312,17 @@ class Postgres(SQL):
 			try:
 				self.execute(query, conn, cursor)
 			except psycopg2.DataError as de:
+				# Exception raised for errors that are due to problems with the processed data 
+				# like division by zero, numeric value out of range, etc. 
+				# It is a subclass of DatabaseError.
+
 				logger.warning(de.message)
 				logger.warning(u"Query: %s" % query)
-				pass
+				raise
+			
 			except Exception as e:
 				logger.debug(u"Execute error: %s" % e)
-				if (e[0] != 2006):
+				if e[0] != 2006:
 					# 2006: PgSQL server has gone away
 					raise
 				self._createConnectionPool()
@@ -360,7 +367,7 @@ class Postgres(SQL):
 				self.execute(query, conn, cursor)
 			except Exception as e:
 				logger.debug(u"Execute error: %s" % e)
-				if (e[0] != 2006):
+				if e[0] != 2006:
 					# 2006: PgSQL server has gone away
 					raise
 				self._createConnectionPool()
@@ -386,7 +393,7 @@ class Postgres(SQL):
 				self.execute(query, conn, cursor)
 			except Exception as e:
 				logger.debug(u"Execute error: %s" % e)
-				if (e[0] != 2006):
+				if e[0] != 2006:
 					# 2006: PgSQL server has gone away
 					raise
 				self._createConnectionPool()
@@ -450,15 +457,10 @@ class PostgresBackend(SQLBackend):
 		self._licenseManagementModule = False
 		self._sqlBackendModule = False
 
-		backendinfo = self._context.backend_info()
-		modules = backendinfo['modules']
-		helpermodules = backendinfo['realmodules']
-
-		backendinfo = self._context.backend_info()
 		logger.debug(u'PgSQLBackend created: %s' % self)
 
 	def _showwarning(self, message, category, filename, lineno, line=None, file=None):
-		#logger.warning(u"%s (file: %s, line: %s)" % (message, filename, lineno))
+		# logger.warning(u"%s (file: %s, line: %s)" % (message, filename, lineno))
 		if str(message).startswith('Data truncated for column'):
 			logger.error(message)
 		else:
@@ -513,7 +515,7 @@ class PostgresBackend(SQLBackend):
 		else:
 			self._sql.insert("PRODUCT_PROPERTY", data)
 
-		if not possibleValues is None:
+		if possibleValues is not None:
 			(conn, cursor) = self._sql.connect()
 			myTransactionSuccess = False
 			myMaxRetryTransaction = 10
@@ -525,18 +527,18 @@ class PostgresBackend(SQLBackend):
 					cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE")
 					self._sql.doCommit = False
 #					conn.begin()
-					logger.notice(u'Start Transaction: delete from ppv %d' % myRetryTransactionCounter)
+					logger.debug2(u'Start Transaction: delete from ppv %d' % myRetryTransactionCounter)
 
 					self._sql.delete('PRODUCT_PROPERTY_VALUE', where, conn, cursor)
 					conn.commit()
 					myTransactionSuccess = True
 				except Exception as e:
 					logger.debug(u"Execute error: %s" % e)
-					if (e.args[0] == 1213):
+					if e.args[0] == 1213:
 						# 1213: 'Deadlock found when trying to get lock; try restarting transaction'
 						# 1213: May be table locked because of concurrent access - retrying
 						myTransactionSuccess = False
-						if (myRetryTransactionCounter >= myMaxRetryTransaction):
+						if myRetryTransactionCounter >= myMaxRetryTransaction:
 							logger.error(u'Table locked (Code 2013) - giving up after %d retries' % myRetryTransactionCounter)
 							raise
 						else:
@@ -546,10 +548,10 @@ class PostgresBackend(SQLBackend):
 						logger.error(u'Unknown DB Error: %s' % str(e))
 						raise
 
-				logger.notice(u'End Transaction')
+				logger.debug2(u'End Transaction')
 				self._sql.doCommit = True
-				logger.notice(u'doCommit set to true')
-			self._sql.close(conn,cursor)
+				logger.debug2(u'doCommit set to true')
+			self._sql.close(conn, cursor)
 
 		(conn, cursor) = self._sql.connect()
 		for value in possibleValues:
@@ -611,11 +613,11 @@ class PostgresBackend(SQLBackend):
 						myTransactionSuccess = True
 					except Exception as e:
 						logger.debug(u"Execute error: %s" % e)
-						if (e.args[0] == 1213):
+						if e.args[0] == 1213:
 							# 1213: 'Deadlock found when trying to get lock; try restarting transaction'
 							# 1213: May be table locked because of concurrent access - retrying
 							myTransactionSuccess = False
-							if (myRetryTransactionCounter >= myMaxRetryTransaction):
+							if myRetryTransactionCounter >= myMaxRetryTransaction:
 								logger.error(u'Table locked (Code 2013) - giving up after %d retries' % myRetryTransactionCounter)
 								raise
 							else:
@@ -625,10 +627,10 @@ class PostgresBackend(SQLBackend):
 							logger.error(u'Unknown DB Error: %s' % str(e))
 							raise
 
-				logger.notice(u'End Transaction')
+				logger.debug2(u'End Transaction')
 			finally:
 				self._sql.doCommit = True
-				logger.notice(u'doCommit set to true')
+				logger.debug2(u'doCommit set to true')
 		self._sql.close(conn,cursor)
 
 		def productProperty_updateObject(self, productProperty):
@@ -648,13 +650,13 @@ class PostgresBackend(SQLBackend):
 			del data['defaultValues']
 			self._sql.update('PRODUCT_PROPERTY', where, data)
 
-			if not possibleValues is None:
+			if possibleValues is not None:
 				self._sql.delete('PRODUCT_PROPERTY_VALUE', where)
 
 			for value in possibleValues:
 				try:
 					self._sql.doCommit = False
-					logger.notice(u'doCommit set to false')
+					logger.debug2(u'doCommit set to false')
 					valuesExist = self._sql.getRow(
 						u"select * from \"PRODUCT_PROPERTY_VALUE\" where "
 						u"\"propertyId\" = '{0}' AND \"productId\" = '{1}' AND "
@@ -670,7 +672,7 @@ class PostgresBackend(SQLBackend):
 					)
 					if not valuesExist:
 						self._sql.doCommit = True
-						logger.notice(u'doCommit set to true')
+						logger.debug2(u'doCommit set to true')
 						self._sql.insert('PRODUCT_PROPERTY_VALUE', {
 							'productId': data['productId'],
 							'productVersion': data['productVersion'],
@@ -682,7 +684,7 @@ class PostgresBackend(SQLBackend):
 						)
 				finally:
 					self._sql.doCommit = True
-					logger.notice(u'doCommit set to true')
+					logger.debug2(u'doCommit set to true')
 
 
 
