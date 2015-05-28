@@ -201,6 +201,7 @@ class SQLBackend(ConfigDataBackend):
 			values = forceList(values)
 			if not values:
 				continue
+
 			tmp = []
 			for value in values:
 				if type(value) is bool:
@@ -213,7 +214,7 @@ class SQLBackend(ConfigDataBackend):
 				elif value is None:
 					tmp.append(u'"{0}" is NULL'.format(key))
 				else:
-					value = value.replace(self._sql.ESCAPED_ASTERISK, u'\uffff')
+					#value = value.replace(self._sql.ESCAPED_ASTERISK, u'\uffff')
 					value = self._sql.escapeApostrophe(self._sql.escapeBackslash(value))
 					match = self.OPERATOR_IN_CONDITION_PATTERN.search(value)
 					if match:
